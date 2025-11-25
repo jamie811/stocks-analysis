@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/stocks-analysis/static/css/main.7432d589.css",
-    "main.js": "/stocks-analysis/static/js/main.acabcfe9.js",
+    "main.css": "/stocks-analysis/static/css/main.587d5570.css",
+    "main.js": "/stocks-analysis/static/js/main.953486cb.js",
     "static/js/453.d7446e4a.chunk.js": "/stocks-analysis/static/js/453.d7446e4a.chunk.js",
     "index.html": "/stocks-analysis/index.html",
-    "main.7432d589.css.map": "/stocks-analysis/static/css/main.7432d589.css.map",
-    "main.acabcfe9.js.map": "/stocks-analysis/static/js/main.acabcfe9.js.map",
+    "main.587d5570.css.map": "/stocks-analysis/static/css/main.587d5570.css.map",
+    "main.953486cb.js.map": "/stocks-analysis/static/js/main.953486cb.js.map",
     "453.d7446e4a.chunk.js.map": "/stocks-analysis/static/js/453.d7446e4a.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.7432d589.css",
-    "static/js/main.acabcfe9.js"
+    "static/css/main.587d5570.css",
+    "static/js/main.953486cb.js"
   ]
 }
