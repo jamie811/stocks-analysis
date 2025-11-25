@@ -35,7 +35,7 @@ function App() {
         bb_interval: settings.bbInterval, bb_length: settings.bbLength
       };
       const queryParams = new URLSearchParams(params).toString();
-      const response = await axios.get(`http://127.0.0.1:8000/analyze/${ticker}?${queryParams}`);
+      const response = await axios.get(`https://my-stock-api.onrender.com/analyze/${ticker}?${queryParams}`);
       if (response.data.error) setError(response.data.error);
       else setResult(response.data);
     } catch (err) { setError("서버 통신 오류"); } 
