@@ -57,7 +57,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center py-10 px-4 font-sans">
       <h1 className="text-3xl md:text-4xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-500">
-        AI Trading Advisor
+        Multi Timeframe Analysis
       </h1>
       <p className="text-gray-400 mb-8 text-sm">멀티 타임프레임, 지표 분석</p>
 
