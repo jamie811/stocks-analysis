@@ -47,12 +47,26 @@ def get_kis_price(ticker, token, appkey, appsecret):
         return None
     except: return None
 
+@app.get("/models")
+def get_gemini_models(gemini_api_key: str = Header(None)):
+    if not gemini_api_key:
+        return {"error": "API Key가 필요합니다."}
+    try:
+        genai.configure(api_key=gemini_api_key)
+        models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                models.append(m.name)
+        return {"models": models}
+    except Exception as e:
+        return {"error": str(e)}
+    
 @app.get("/analyze/{keyword}")
 def analyze_stock(
     keyword: str,
     ma_interval: str = Query("1d"), 
     w_ma: float = Query(1.5), w_rsi: float = Query(1.0), w_macd: float = Query(1.0), w_stoch: float = Query(0.5), w_bb: float = Query(1.0),
-    kis_appkey: str = Header(None), kis_secret: str = Header(None), gemini_api_key: str = Header(None)
+    kis_appkey: str = Header(None), kis_secret: str = Header(None), gemini_api_key: str = Header(None), gemini_model: str = Header("models/gemini-2.0-flash")
 ):
     ticker = get_ticker_symbol(keyword)
     is_korean = ticker.endswith(".KS")
@@ -251,7 +265,8 @@ def analyze_stock(
                 이유: {', '.join(reasons)}
                 전략: 스윙TP {strategies['swing']['tp']}
                 """
-                model = genai.GenerativeModel('gemini-2.0-flash')
+                model_name = gemini_model if gemini_model else "models/gemini-2.0-flash"
+                model = genai.GenerativeModel(model_name)
                 response = model.generate_content(prompt)
                 ai_comment = response.text.strip()
             except Exception as e: ai_comment = str(e)
