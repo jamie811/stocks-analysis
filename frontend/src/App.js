@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// --------------------------------------------------------------------------
-// 아이콘 컴포넌트
-// --------------------------------------------------------------------------
 const StarIcon = ({ filled, onClick }) => (
   <svg onClick={onClick} xmlns="http://www.w3.org/2000/svg" className={`h-6 w-6 cursor-pointer transition ${filled ? "text-yellow-400 fill-yellow-400" : "text-gray-400 hover:text-yellow-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
@@ -26,12 +23,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // UI 토글 상태 (설정, 즐겨찾기, 기록)
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(true);      // [MODIFIED] 검색 기록 토글
-  const [showFavorites, setShowFavorites] = useState(true);  // [NEW] 즐겨찾기 토글 별도 추가
+  const [showHistory, setShowHistory] = useState(true);
+  const [showFavorites, setShowFavorites] = useState(true);
 
-  // 데이터 상태
   const [history, setHistory] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
@@ -51,9 +46,6 @@ function App() {
     geminiModel: "models/gemini-2.0-flash"
   };
 
-  // --------------------------------------------------------------------------
-  // [Lazy Initialization] 로컬 스토리지에서 설정 바로 읽어오기 (새로고침 유지용)
-  // --------------------------------------------------------------------------
   const [settings, setSettings] = useState(() => {
     try {
       const saved = localStorage.getItem('myStockSettings');
@@ -64,7 +56,6 @@ function App() {
     return defaultSettings;
   });
 
-  // 모델 가져오기
   const fetchModels = async (apiKey) => {
     if (!apiKey) return;
     try {
@@ -77,7 +68,6 @@ function App() {
     } catch (e) { console.error(e); }
   };
 
-  // 초기 로드 (history, favorites, models)
   useEffect(() => {
     const savedHistory = localStorage.getItem('myStockHistory');
     const savedFavorites = localStorage.getItem('myStockFavorites');
@@ -85,14 +75,11 @@ function App() {
     if (savedHistory) try { setHistory(JSON.parse(savedHistory)); } catch (e) {}
     if (savedFavorites) try { setFavorites(JSON.parse(savedFavorites)); } catch (e) {}
 
-    // 저장된 키가 있으면 모델 로드
     if (settings.geminiApiKey) {
       fetchModels(settings.geminiApiKey);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 상태 변경 시 저장
   useEffect(() => localStorage.setItem('myStockSettings', JSON.stringify(settings)), [settings]);
   useEffect(() => localStorage.setItem('myStockHistory', JSON.stringify(history)), [history]);
   useEffect(() => localStorage.setItem('myStockFavorites', JSON.stringify(favorites)), [favorites]);
@@ -179,12 +166,12 @@ function App() {
       <div className="flex w-full max-w-md gap-2 mb-2">
         <input type="text" placeholder="티커 (예: 005930, TSLA)" className="flex-1 p-4 rounded-xl bg-gray-800 border border-gray-700 focus:border-yellow-500 text-lg uppercase font-bold tracking-wider"
           value={ticker} onChange={(e) => setTicker(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAnalyze()} />
-        <button onClick={() => handleAnalyze()} disabled={loading} className="bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-500 text-black font-bold py-4 px-6 rounded-xl transition disabled:opacity-50 shadow-lg">
+        <button onClick={() => handleAnalyze()} disabled={loading} className="bg-gradient-to-r from-blue-600 to-teal-500 text-black font-bold py-4 px-6 rounded-xl transition disabled:opacity-50 shadow-lg">
           {loading ? "..." : "분석"}
         </button>
       </div>
 
-      {/* [MODIFIED] 토글 버튼 영역 분리 */}
+      {/* 토글 버튼 */}
       <div className="flex gap-4 mb-4">
         {(favorites.length > 0) && (
           <button 
@@ -204,7 +191,7 @@ function App() {
         )}
       </div>
 
-      {/* [NEW] 즐겨찾기 영역 (독립적 표시) */}
+      {/* 즐겨찾기 영역 */}
       {showFavorites && favorites.length > 0 && (
         <div className="w-full max-w-md mb-4 animate-fade-in-down">
             <div className="flex flex-wrap gap-2 justify-center">
@@ -217,7 +204,7 @@ function App() {
         </div>
       )}
 
-      {/* [MODIFIED] 검색 기록 영역 (독립적 표시) */}
+      {/* 검색 기록 영역 */}
       {showHistory && history.length > 0 && (
         <div className="w-full max-w-md mb-6 animate-fade-in-down">
             <div className="flex flex-wrap gap-2 justify-center items-center">
