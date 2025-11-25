@@ -1,70 +1,19 @@
-# Getting Started with Create React App
+📈 AI Trading Analyst (AI 주식 분석기)데이터 기반의 기술적 분석(Technical Analysis)과 생성형 AI(Gemini)의 통찰력을 결합한 주식 투자 보조 도구입니다.Top-Down 방식(시장/추세 파악 → 매매 타이밍 결정)을 적용하여, 단순히 지표를 나열하는 것을 넘어 **실전적인 매매 전략(익절/손절가)**과 종합 점수를 제공합니다.✨ 주요 기능 (Key Features)멀티 타임프레임 분석: 단타(60분), 스윙(일봉), 장투(주봉) 관점을 통합하여 분석합니다.AI 투자 자문: Google Gemini Pro/Flash 모델을 활용해 현재 차트 상황을 전문가처럼 브리핑합니다.ATR 기반 전략: 종목의 변동성(ATR)을 계산하여 과학적인 목표가(Target)와 손절가(Stop Loss)를 제시합니다.시장 분위기 파악: VIX(공포지수)와 회전율(수급)을 통해 현재 시장이 진입하기 좋은 시기인지 판단합니다.개인화 설정 (BYOK): 사용자의 API 키(Gemini, 한국투자증권)를 브라우저에 안전하게 저장하여 사용하며, 지표별 가중치(Weight)를 직접 조절할 수 있습니다.📊 사용 지표 및 분석 로직 (Indicators & Logic)이 프로젝트는 **추세(Trend)**와 타이밍(Timing) 두 가지 관점에서 지표를 분류하여 점수를 산출합니다.1. 🌍 Market & Trend (숲을 보는 지표)시장의 방향성과 종목의 대세 흐름을 파악합니다.지표명설명 및 분석 로직이동평균선 (MA)5, 20, 60, 120일선을 분석합니다.• 정배열(5>20>60>120): 강력 매수 신호 (+100점)• 골든크로스(5vs20, 20vs60): 추세 전환 신호 (가산점)• 역배열: 하락 추세 (0점)MACD추세의 강도와 방향을 분석합니다.• 0선 위 상승: 상승 가속 구간 (고득점)• 0선 아래 하락: 하락 가속 구간 (저득점)• 상승/하락 반전 시그널 포착OBV거래량 기반의 추세 지표입니다.• 주가는 하락하는데 OBV가 버티면 **매집(Smart Money)**으로 판단합니다.• 추세의 신뢰도를 더해주는 보조 지표로 활용됩니다.VIX (공포지수)시장 전체의 심리를 파악합니다.• 20 이상: 공포/패닉 (변동성 확대)• 15 이하: 평온/탐욕 (안정적 상승장 가능성)회전율 (Turnover)전체 상장 주식 수 대비 거래량을 분석합니다.• 5% 이상: 폭발적 관심 (단타/급등주)• 1% 미만: 소외주 (변동성 부족)2. ⚡ Trading Timing (나무를 베는 지표)구체적인 진입 시점(타점)을 잡아냅니다.지표명설명 및 분석 로직RSI과매수/과매도를 판단하는 역추세 지표입니다.• 30 이하: 과매도 (저점 매수 기회, 고득점)• 70 이상: 과매수 (고점 매도 신호, 저득점)스토캐스틱 (Stochastic)RSI보다 민감하게 단기 타점을 잡습니다.• K < 20: 바닥권 (매수 시그널)• K > 80: 과열권 (매도 시그널)볼린저 밴드 (BB)가격의 상대적 위치(%B)를 분석합니다.• 하단 밴드 터치: 기술적 반등 구간 (매수)• 상단 밴드 돌파: 단기 고점 구간 (매도)ATR 전략변동성(Average True Range)을 기반으로 손익비를 계산합니다.• 단타: 60분봉 ATR 기준 (타이트한 구간)• 스윙: 일봉 ATR × 2배 (여유 있는 구간)• 장투: 주봉 ATR × 3배 (추세 추종 구간)🛠️ 설치 및 실행 방법 (Installation)이 프로젝트는 Python (Backend) 과 React (Frontend) 로 구성되어 있습니다.1. 백엔드 실행 (FastAPI)데이터 수집 및 분석 엔진을 실행합니다.Bash# 1. backend 폴더로 이동
+cd backend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+# 2. 필수 패키지 설치
+pip install -r requirements.txt
 
-## Available Scripts
+# 3. 서버 실행 (개발 모드)
+# 포트 8010번에서 실행됩니다.
+uvicorn main:app --reload --port 8010
+2. 프론트엔드 실행 (React)사용자 인터페이스(웹사이트)를 실행합니다.Bash# 1. frontend 폴더로 이동
+cd frontend
 
-In the project directory, you can run:
+# 2. 필수 패키지 설치
+npm install
 
-### `npm start`
-
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
-
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
-
-### `npm test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+# 3. 웹사이트 실행
+# 브라우저가 자동으로 열립니다 (http://localhost:3010)
+npm start
+⚙️ 설정 가이드 (Settings)웹사이트 접속 후 [▼ 설정 열기] 버튼을 눌러 개인화할 수 있습니다.🤖 Gemini API Key:Google AI Studio에서 무료 키를 발급받아 입력하세요.입력 시 AI가 데이터를 분석하여 **"매수/매도 조언"**을 텍스트로 제공합니다.🇰🇷 한투 API (선택사항):한국투자증권 Open API 키를 입력하면 한국 주식 분석 시 실시간 시세가 적용됩니다.입력하지 않아도 20분 지연 시세(Yahoo Finance)로 분석 가능합니다.⚖️ 지표 가중치 (Weights):본인의 투자 스타일에 맞춰 지표별 중요도를 조절하세요.예: "나는 추세매매를 한다" → MA, MACD 가중치 UP / RSI 가중치 DOWN🏗️ 기술 스택 (Tech Stack)Frontend: React, Tailwind CSS, Lightweight Charts (TradingView)Backend: Python, FastAPI, Pandas, Pandas-TA, yfinanceAI: Google Gemini 2.0 FlashDeployment: GitHub Pages (Frontend), Render (Backend)⚠️ 면책 조항 (Disclaimer)이 프로젝트는 투자 보조 도구일 뿐이며, 모든 투자의 책임은 사용자 본인에게 있습니다.제공되는 데이터(yfinance 등)는 실시간이 아니거나 오류가 있을 수 있습니다.AI의 조언은 참고용이며, 절대적인 매수/매도 신호가 아닙니다.
