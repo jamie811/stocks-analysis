@@ -34,6 +34,30 @@ def get_kis_token(appkey, appsecret):
         res = requests.post(url, json=body)
         return res.json().get("access_token")
     except: return None
+    
+def get_kis_investors(ticker, token, appkey, appsecret):
+    url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor"
+    # TR_ID: FHKST01010900 (현물 투자자별 매매동향)
+    headers = {"content-type": "application/json", "authorization": f"Bearer {token}", "appkey": appkey, "appsecret": appsecret, "tr_id": "FHKST01010900"}
+    params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": ticker.replace(".KS", "")}
+    
+    try:
+        res = requests.get(url, headers=headers, params=params)
+        data = res.json()
+        if data['rt_cd'] == '0' and data['output']:
+            # 당일(0번째 인덱스, 보통 output 리스트에 여러 날짜가 옴) 누적 순매수 데이터
+            # prsn: 개인, frgn: 외국인, orgn: 기관
+            todays = data['output'][0]
+            return {
+                "individual": int(todays.get('prsn_ntby_qty', 0)),
+                "foreigner": int(todays.get('frgn_ntby_qty', 0)),
+                "institution": int(todays.get('orgn_ntby_qty', 0)),
+                "date": todays.get('stck_bsop_date', '')
+            }
+        return None
+    except Exception as e:
+        print(f"KIS Investor Error: {e}")
+        return None
 
 # [KIS] 현재가 조회
 def get_kis_price(ticker, token, appkey, appsecret):
@@ -86,6 +110,8 @@ def analyze_stock(
 
         # 2. 실시간 시세 (KIS)
         real_time_applied = False
+        investor_trend = None
+        
         if is_korean and kis_appkey and kis_secret:
             token = get_kis_token(kis_appkey, kis_secret)
             if token:
@@ -94,9 +120,29 @@ def analyze_stock(
                     for k in data_store:
                         data_store[k].iloc[-1, data_store[k].columns.get_loc('Close')] = cp
                     real_time_applied = True
+                investor_trend = get_kis_investors(ticker, token, kis_appkey, kis_secret)
 
         main_df = data_store.get(ma_interval, data_store["1d"]).copy()
         last_price = main_df['Close'].iloc[-1]
+        analyst_data = {"recommendation": "-", "target_mean": "-", "target_low": "-", "target_high": "-", "upside": "-"}
+        try:
+            info = yf.Ticker(ticker).info
+            rec_key = info.get('recommendationKey', 'none')
+            t_mean = info.get('targetMeanPrice', None)
+            
+            # 한글화 매핑
+            rec_map = {"buy": "매수", "strong_buy": "강력매수", "hold": "중립", "sell": "매도", "underperform": "비중축소", "none": "-"}
+            analyst_data['recommendation'] = rec_map.get(rec_key, rec_key.upper())
+            
+            if t_mean:
+                analyst_data['target_mean'] = f"{t_mean:,.0f}" if is_korean else f"{t_mean:.2f}"
+                analyst_data['target_low'] = f"{info.get('targetLowPrice', 0):,.0f}" if is_korean else f"{info.get('targetLowPrice', 0):.2f}"
+                analyst_data['target_high'] = f"{info.get('targetHighPrice', 0):,.0f}" if is_korean else f"{info.get('targetHighPrice', 0):.2f}"
+                
+                # 상승 여력 계산
+                upside = ((t_mean - last_price) / last_price) * 100
+                analyst_data['upside'] = f"{upside:.2f}%"
+        except: pass
 
         # ---------------------------------------------------------
         # [점수 산출]
@@ -276,7 +322,8 @@ def analyze_stock(
             "score": final_score, "reasons": reasons, "indicators": indicators, "strategies": strategies,
             "turnover": {"rate": f"{tr:.2f}", "msg": t_msg, "volume": f"{vol:,.0f}", "shares": f"{shares:,.0f}"},
             "real_time": real_time_applied, "vix": {"score": f"{vix_val:.2f}", "msg": vix_msg},
-            "trend_status": trend_status, "ai_message": ai_comment
+            "trend_status": trend_status, "ai_message": ai_comment,
+            "analyst": analyst_data, "investors": investor_trend
         }
 
     except Exception as e:

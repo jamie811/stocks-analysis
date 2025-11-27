@@ -140,6 +140,8 @@ function App() {
     return "text-yellow-400";
   };
 
+  const getNetColor = (val) => val > 0 ? "text-red-400" : val < 0 ? "text-blue-400" : "text-gray-400";
+
   const TimeSelect = ({ value, onChange }) => (
     <select value={value} onChange={onChange} className="bg-gray-700 text-xs rounded p-1 ml-2 border border-gray-600 outline-none cursor-pointer">
       {[{v:"60m",l:"60분"},{v:"1d",l:"일봉"},{v:"1wk",l:"주봉"},{v:"1mo",l:"월봉"}].map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
@@ -289,8 +291,10 @@ function App() {
                    </div>
                </div>
             )}
-            
+
+            {/* MARKET & TREND */}
             <div className="bg-gray-800 rounded-2xl shadow-xl border border-gray-700 overflow-hidden">
+              {/* 1. Header */}
                <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 p-3 border-b border-gray-700 flex justify-between items-center">
                   <h2 className="font-bold text-sm text-blue-200 flex items-center gap-2">🌍 MARKET & TREND <span className="text-[10px] opacity-70"></span></h2>
                   <div className="flex items-center gap-3">
@@ -300,6 +304,8 @@ function App() {
                       </div>
                   </div>
               </div>
+
+              {/* 2. Top: Price & Trend Status */}
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center border-b border-gray-700">
                   <div className="text-center">
                       <div className="flex items-center justify-center gap-2 mb-1">
@@ -329,6 +335,65 @@ function App() {
                       </div>
                   )}
               </div>
+
+              {/* 3. Middle: Analyst & Investors (Integrated) */}
+              {(result.analyst || result.investors) && (
+                 <div className="px-6 py-4 border-t border-b border-gray-700 bg-gray-800/50">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         {/* Analyst Info */}
+                         <div className="flex flex-col gap-2">
+                             <h4 className="text-gray-400 text-[10px] font-bold uppercase">📊 Analyst Consensus</h4>
+                             <div className="grid grid-cols-2 gap-2">
+                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center">
+                                    <span className="text-[10px] text-gray-400">투자의견</span>
+                                    <span className="font-bold text-white text-sm">{result.analyst.recommendation}</span>
+                                 </div>
+                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center">
+                                    <span className="text-[10px] text-gray-400">목표주가</span>
+                                    <div className="text-center leading-none">
+                                        <span className="block font-bold text-white text-sm">{result.analyst.target_mean}</span>
+                                        <span className={`text-[10px] ${parseFloat(result.analyst.upside)>0?'text-red-400':'text-blue-400'}`}>
+                                            ({parseFloat(result.analyst.upside)>0?'+':''}{result.analyst.upside})
+                                        </span>
+                                    </div>
+                                 </div>
+                             </div>
+                         </div>
+                         
+                         {/* Investor Info */}
+                         {result.investors && (
+                             <div className="flex flex-col gap-2">
+                                <h4 className="text-gray-400 text-[10px] font-bold uppercase flex justify-between">
+                                   <span>💰 Investors (Daily)</span>
+                                   <span className="font-normal opacity-50">{result.investors.date}</span>
+                                </h4>
+                                <div className="grid grid-cols-3 gap-1">
+                                   <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col justify-center items-center">
+                                      <span className="text-[10px] text-gray-400 mb-1">개인 🐜</span>
+                                      <span className={`text-xs font-bold ${getNetColor(result.investors.individual)}`}>
+                                         {result.investors.individual > 0 ? "+" : ""}{result.investors.individual.toLocaleString()}
+                                      </span>
+                                   </div>
+                                   <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col justify-center items-center">
+                                      <span className="text-[10px] text-gray-400 mb-1">외인 🗽</span>
+                                      <span className={`text-xs font-bold ${getNetColor(result.investors.foreigner)}`}>
+                                         {result.investors.foreigner > 0 ? "+" : ""}{result.investors.foreigner.toLocaleString()}
+                                      </span>
+                                   </div>
+                                   <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col justify-center items-center">
+                                      <span className="text-[10px] text-gray-400 mb-1">기관 🏢</span>
+                                      <span className={`text-xs font-bold ${getNetColor(result.investors.institution)}`}>
+                                         {result.investors.institution > 0 ? "+" : ""}{result.investors.institution.toLocaleString()}
+                                      </span>
+                                   </div>
+                                </div>
+                             </div>
+                         )}
+                     </div>
+                 </div>
+              )}
+
+              {/* 4. Bottom: Technical Indicators */}
               <div className="p-4 bg-gray-900/30 grid grid-cols-3 gap-2 text-center">
                   <div className="bg-gray-800/50 p-2 rounded border border-gray-700">
                       <span className="text-[10px] text-yellow-400 block mb-1">이평선 (MA)</span>
