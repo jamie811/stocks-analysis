@@ -105,6 +105,14 @@ function App() {
 
     setLoading(true); setError(null); setResult(null);
     try {
+      let storedToken = localStorage.getItem("kisAccessToken");
+      const storedExpire = localStorage.getItem("kisTokenExpire");
+      const now = Math.floor(Date.now() / 1000);
+      if (storedToken && storedExpire && now >= parseInt(storedExpire)) {
+         localStorage.removeItem("kisAccessToken");
+         localStorage.removeItem("kisTokenExpire");
+         storedToken = null;
+      }
       const params = {
         ma_interval: settings.maInterval, ma_short: settings.maShort, ma_long: settings.maLong,
         rsi_interval: settings.rsiInterval, rsi_period: settings.rsiPeriod,
@@ -120,7 +128,8 @@ function App() {
           "kis-appkey": settings.kisAppKey, 
           "kis-secret": settings.kisSecret, 
           "gemini-api-key": settings.geminiApiKey,
-          "gemini-model": settings.geminiModel
+          "gemini-model": settings.geminiModel,
+          "kis-access-token": storedToken,
         }
       });
       
@@ -128,6 +137,13 @@ function App() {
         setError(response.data.error);
       } else {
         setResult(response.data);
+
+        const auth = response.data.auth_info;
+        if (auth && auth.token) {
+            localStorage.setItem("kisAccessToken", auth.token);
+            localStorage.setItem("kisTokenExpire", auth.expire);
+            console.log("🎟️ 새 토큰 발급 및 저장 완료!");
+        }
 
         const isTickerType = /^[0-9]+$/.test(searchTicker) || /^[0-9]+\.KS$/.test(searchTicker);
         let historyName = response.data.ticker;
@@ -171,8 +187,8 @@ function App() {
       <h1 className="text-4xl md:text-6xl font-extrabold py-6 mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-500 drop-shadow-lg">
         Stock Analysis & Advisor
       </h1>
-      <p className="text-gray-400 mb-8 text-sm text-center">Top-Down Analysis System</p>
-
+      <p className="text-gray-400 text-sm text-center">본 서비스는 AI와 기술적 지표를 활용한 지표 분석 도구일 뿐이며, 투자의 결과에 대한 모든 책임은 사용자 본인에게 있습니다.</p>
+      <p className="text-gray-400 mb-8 text-sm text-center">활용 지표의 점수화 기준은 다음 설명을 참고해주세요.</p>
       {/* 입력창 */}
       <div className="flex w-full max-w-md gap-2 mb-2">
         <input type="text" placeholder="티커 (예: 005930, TSLA)" className="flex-1 p-4 rounded-xl bg-gray-800 border border-gray-700 focus:border-yellow-500 text-lg uppercase font-bold tracking-wider"
@@ -349,17 +365,20 @@ function App() {
               {/* 3. Middle: Analyst & Investors (Integrated) */}
               {(result.analyst || result.investors) && (
                  <div className="px-6 py-4 border-t border-b border-gray-700 bg-gray-800/50">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         {/* Analyst Info */}
-                         <div className="flex flex-col gap-2">
+                     {/* [핵심 수정] 전체를 5등분 (md:grid-cols-5) */}
+                     <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                         
+                         {/* Analyst Info: 5칸 중 2칸 차지 (md:col-span-2) */}
+                         <div className="md:col-span-2 flex flex-col gap-2">
                              <h4 className="text-gray-400 text-[10px] font-bold uppercase">📊 Analyst Consensus</h4>
-                             <div className="grid grid-cols-2 gap-2">
-                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center">
-                                    <span className="text-[10px] text-gray-400">투자의견</span>
+                             {/* 내부는 2등분 */}
+                             <div className="grid grid-cols-2 gap-2 h-full">
+                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center justify-center">
+                                    <span className="text-[10px] text-gray-400 mb-1">투자의견</span>
                                     <span className="font-bold text-white text-sm">{result.analyst.recommendation}</span>
                                  </div>
-                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center">
-                                    <span className="text-[10px] text-gray-400">목표주가</span>
+                                 <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col items-center justify-center">
+                                    <span className="text-[10px] text-gray-400 mb-1">목표주가</span>
                                     <div className="text-center leading-none">
                                         <span className="block font-bold text-white text-sm">{result.analyst.target_mean}</span>
                                         <span className={`text-[10px] ${parseFloat(result.analyst.upside)>0?'text-red-400':'text-blue-400'}`}>
@@ -370,14 +389,15 @@ function App() {
                              </div>
                          </div>
                          
-                         {/* Investor Info */}
+                         {/* Investor Info: 5칸 중 3칸 차지 (md:col-span-3) */}
                          {result.investors && (
-                             <div className="flex flex-col gap-2">
+                             <div className="md:col-span-3 flex flex-col gap-2">
                                 <h4 className="text-gray-400 text-[10px] font-bold uppercase flex justify-between">
                                    <span>💰 Investors (Daily)</span>
                                    <span className="font-normal opacity-50">{result.investors.date}</span>
                                 </h4>
-                                <div className="grid grid-cols-3 gap-1">
+                                {/* 내부는 3등분 */}
+                                <div className="grid grid-cols-3 gap-2 h-full">
                                    <div className="bg-gray-700/30 p-2 rounded border border-gray-600 flex flex-col justify-center items-center">
                                       <span className="text-[10px] text-gray-400 mb-1">개인 🐜</span>
                                       <span className={`text-xs font-bold ${getNetColor(result.investors.individual)}`}>
@@ -446,6 +466,33 @@ function App() {
                           <div className="text-[10px] space-y-1 font-mono"><p className="text-gray-300">TP <span className="text-red-400">{result.strategies.long.tp}</span></p><p className="text-gray-300">SL <span className="text-blue-400">{result.strategies.long.sl}</span></p></div>
                       </div>
                   </div>
+
+                  {result.sr && (
+                    <div className="mb-8 px-2">
+                        <div className="flex justify-between text-xs mb-2 font-mono">
+                            <span className="text-blue-400">▼ 바닥(지지) {result.sr.support}</span>
+                            <span className="text-xs text-gray-400">현재 위치 ({result.sr.position}%)</span>
+                            <span className="text-red-400">천장(저항) {result.sr.resistance} ▲</span>
+                        </div>
+                        <div className="w-full h-3 bg-gray-700 rounded-full relative overflow-hidden">
+                            {/* 배경 그라디언트 (파랑 -> 빨강) */}
+                            <div 
+                                className="absolute top-0 bottom-0 bg-gradient-to-r from-blue-500 via-gray-500 to-red-500 opacity-50"
+                                style={{ width: '100%' }}
+                            ></div>
+                            
+                            {/* 현재가 위치 표시기 (하얀 막대) */}
+                            <div 
+                                className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_white] transition-all duration-1000" 
+                                style={{ left: `${Math.max(0, Math.min(100, result.sr.position))}%` }}
+                            ></div>
+                        </div>
+                        <p className="text-[10px] text-gray-500 text-center mt-1">
+                            * 지지선: 20일 최저가 | 저항선: 20일 이평선(또는 전고점)
+                        </p>
+                    </div>
+                )}
+
                   <div className="grid grid-cols-3 gap-2 text-center">
                       <div className="bg-gray-700/30 p-2 rounded border border-gray-600">
                           <span className="text-[10px] text-blue-300 block mb-1">RSI</span>

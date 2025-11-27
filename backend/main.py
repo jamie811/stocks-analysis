@@ -13,18 +13,19 @@ import os
 
 NAME_TO_CODE = {}
 CODE_TO_NAME = {}
+SEARCH_MAP = {}
 
 def load_kis_master_data():
-    global NAME_TO_CODE
+    global NAME_TO_CODE, CODE_TO_NAME, SEARCH_MAP
     print("⏳ KIS 종목 마스터 파일 다운로드 중... (서버 시작 시 1회)")
     
-    base_dir = os.getcwd()
     urls = {
         "kospi": "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip",
         "kosdaq": "https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip"
     }
 
     try:
+        count = 0
         for market, url in urls.items():
             res = requests.get(url)
             if res.status_code != 200:
@@ -34,27 +35,42 @@ def load_kis_master_data():
             with zipfile.ZipFile(io.BytesIO(res.content)) as zf:
                 file_name = zf.namelist()[0] 
                 with zf.open(file_name) as f:
-                    content = f.read().decode('cp949') 
+                    content = f.read()
+                    lines = content.split(b'\n')
                     
-                    lines = content.split('\n')
                     for line in lines:
                         if len(line) < 30: continue
-                        code = line[0:9].strip()
-                        name_raw = line[21:].strip()
                         
-                        name = name_raw.split()[0] if name_raw else ""
+                        try:
+                            # 단축코드 (9자리) -> ASCII 디코딩
+                            code_bytes = line[0:9]
+                            code = code_bytes.decode('ascii').strip()
+                            
+                            # 한글명 (21번째부터 40바이트 길이) -> CP949 디코딩
+                            # 61번째 바이트까지만 잘라야 뒤에 붙은 쓰레기값이 안 들어옵니다.
+                            name_bytes = line[21:61] 
+                            name = name_bytes.decode('cp949').strip()
+                            
+                            # 단축코드에서 'A'로 시작하는 경우 등을 처리 (보통 1번째부터)
+                            short_code = code[1:7] if len(code) >= 7 else code
                         
-                        short_code = code[1:7] if len(code) >= 7 else code 
-                        
-                        if name and short_code:
-                            NAME_TO_CODE[name] = short_code
+                            if name and short_code:
+                                NAME_TO_CODE[name] = short_code
+                                CODE_TO_NAME[short_code] = name
+                                
+                                search_key = name.upper().replace(" ", "")
+                                SEARCH_MAP[search_key] = short_code
+                                
+                                count += 1
+                                
+                        except Exception as parse_err:
+                            # 인코딩 에러 등이 나면 해당 라인은 건너뜀
+                            continue
 
         print(f"✅ KIS 종목 마스터 로드 완료! (총 {len(NAME_TO_CODE)}개 종목)")
         
     except Exception as e:
         print(f"🚨 마스터 파일 로드 실패: {e}")
-        NAME_TO_CODE.update({"삼성전자": "005930", "카카오": "035720", "NAVER": "035420", "하이닉스": "000660"})
-        CODE_TO_NAME.update({"005930": "삼성전자", "035720": "카카오"})
 
 load_kis_master_data()
 
@@ -67,9 +83,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 def get_ticker_symbol(keyword):
-    keyword = keyword.strip()
+    keyword_clean = keyword.strip().upper().replace(" ", "")
+    
+    if keyword_clean in SEARCH_MAP:
+        return f"{SEARCH_MAP[keyword_clean]}.KS"
     
     if keyword in NAME_TO_CODE:
         return f"{NAME_TO_CODE[keyword]}.KS"
@@ -84,35 +102,24 @@ def get_period_by_interval(interval):
     if interval in ["15m", "30m", "60m", "90m", "1h"]: return "1mo"
     return "2y"
 
-TOKEN_CACHE = {}
 
 # [KIS] 토큰 발급
-def get_kis_token(appkey, appsecret):
-    global TOKEN_CACHE
-    
-    if appkey in TOKEN_CACHE:
-        cache = TOKEN_CACHE[appkey]
-        if time.time() < cache["expire_time"]:
-            return cache["token"]
+def get_kis_token(appkey, appsecret, header_token=None):
+    if header_token and len(header_token) > 10:
+        return header_token, False
         
     url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
     body = {"grant_type": "client_credentials", "appkey": appkey, "appsecret": appsecret}
     try:
         res = requests.post(url, json=body)
         data = res.json()
-        access_token = data.get("access_token")
-        
-        if access_token:
-            expire_in = 20 * 60 * 60 
-            TOKEN_CACHE[appkey] = {
-                "token": access_token,
-                "expire_time": time.time() + expire_in
-            }
-            return access_token
-        return None
+        new_token = data.get("access_token")
+        if new_token:
+            return new_token, True
+
     except Exception as e:
         print(f"Token Error: {e}")
-        return None
+        return None, False
     
 def get_kis_investors(ticker, token, appkey, appsecret):
     url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor"
@@ -124,8 +131,6 @@ def get_kis_investors(ticker, token, appkey, appsecret):
         res = requests.get(url, headers=headers, params=params)
         data = res.json()
         if data['rt_cd'] == '0' and data['output']:
-            # 당일(0번째 인덱스, 보통 output 리스트에 여러 날짜가 옴) 누적 순매수 데이터
-            # prsn: 개인, frgn: 외국인, orgn: 기관
             todays = data['output'][0]
             return {
                 "individual": int(todays.get('prsn_ntby_qty', 0)),
@@ -169,10 +174,15 @@ def analyze_stock(
     keyword: str,
     ma_interval: str = Query("1d"), 
     w_ma: float = Query(1.5), w_rsi: float = Query(1.0), w_macd: float = Query(1.0), w_stoch: float = Query(0.5), w_bb: float = Query(1.0),
-    kis_appkey: str = Header(None), kis_secret: str = Header(None), gemini_api_key: str = Header(None), gemini_model: str = Header("models/gemini-2.0-flash")
+    kis_appkey: str = Header(None), kis_secret: str = Header(None), gemini_api_key: str = Header(None), gemini_model: str = Header("models/gemini-2.0-flash"),
+    kis_access_token: str = Header(None),
 ):
     ticker = get_ticker_symbol(keyword)
+    import re
+    
     is_korean = ticker.endswith(".KS")
+    if re.search("[가-힣]", ticker):
+        return {"error": f"'{keyword}'에 대한 종목 코드를 찾을 수 없습니다. 정확한 회사명이나 코드를 입력해주세요."}
     
     stock_name = ticker
     if is_korean:
@@ -198,10 +208,17 @@ def analyze_stock(
         # 2. 실시간 시세 (KIS)
         real_time_applied = False
         investor_trend = None
+        new_issued_token = None
+        token_expire_time = None
         
-        if is_korean and kis_appkey and kis_secret:
-            token = get_kis_token(kis_appkey, kis_secret)
+        if ticker.endswith(".KS") and kis_appkey and kis_secret:
+            token, is_new = get_kis_token(kis_appkey, kis_secret, kis_access_token)
+            
             if token:
+                if is_new:
+                    new_issued_token = token
+                    token_expire_time = int(time.time()) + (23 * 60 * 60)
+                    
                 cp = get_kis_price(ticker, token, kis_appkey, kis_secret)
                 if cp:
                     for k in data_store:
@@ -217,7 +234,6 @@ def analyze_stock(
             rec_key = info.get('recommendationKey', 'none')
             t_mean = info.get('targetMeanPrice', None)
             
-            # 한글화 매핑
             rec_map = {"buy": "매수", "strong_buy": "강력매수", "hold": "중립", "sell": "매도", "underperform": "비중축소", "none": "-"}
             analyst_data['recommendation'] = rec_map.get(rec_key, rec_key.upper())
             
@@ -226,7 +242,6 @@ def analyze_stock(
                 analyst_data['target_low'] = f"{info.get('targetLowPrice', 0):,.0f}" if is_korean else f"{info.get('targetLowPrice', 0):.2f}"
                 analyst_data['target_high'] = f"{info.get('targetHighPrice', 0):,.0f}" if is_korean else f"{info.get('targetHighPrice', 0):.2f}"
                 
-                # 상승 여력 계산
                 upside = ((t_mean - last_price) / last_price) * 100
                 analyst_data['upside'] = f"{upside:.2f}%"
         except: pass
@@ -239,55 +254,44 @@ def analyze_stock(
 
         # 1. MA (이평선) - 수정됨: 이름표를 "MA_Cross"로 통일
         try:
-            data_len = len(main_df)
-            if data_len >= 5: main_df.ta.sma(length=5, append=True)
-            if data_len >= 20: main_df.ta.sma(length=20, append=True)
-            if data_len >= 60: main_df.ta.sma(length=60, append=True)
-            if data_len >= 120: main_df.ta.sma(length=120, append=True)
+            if len(main_df) >= 20: main_df.ta.sma(length=20, append=True)
+            if len(main_df) >= 60: main_df.ta.sma(length=60, append=True)
             
-            curr = main_df.iloc[-1]
-            prev = main_df.iloc[-2]
+            ma20 = main_df['SMA_20'].iloc[-1]
+            ma60 = main_df['SMA_60'].iloc[-1]
             
-            ma5 = curr.get('SMA_5', 0)
-            ma20 = curr.get('SMA_20', 0)
-            ma60 = curr.get('SMA_60', 0)
-            ma120 = curr.get('SMA_120', 0)
+            # 이격도 계산 (현재가 / 20일선 * 100)
+            disparity = (last_price / ma20) * 100
             
-            p5 = prev.get('SMA_5', 0)
-            p20 = prev.get('SMA_20', 0)
-            p60 = prev.get('SMA_60', 0)
+            ma_score = 50
+            ma_msg = None
             
-            align_score = 50
-            cross_score = 0
-            status_list = []
-            
-            if ma5>0 and ma20>0 and ma60>0 and ma120>0:
-                if ma5 > ma20 > ma60 > ma120: align_score = 100; reasons.append("이평선 정배열 (강력 상승)")
-                elif ma5 < ma20 < ma60 < ma120: align_score = 0; reasons.append("이평선 역배열 (하락 추세)")
-            
-            if ma5 > 0 and ma20 > 0:
-                if ma5 > ma20: status_list.append("5>20:O")
-                else: status_list.append("5>20:X")
+            # [전략] 20일선 근처(98~102%)에 붙어있거나, 살짝 아래(95~98%)일 때 매수 기회
+            if 95 <= disparity <= 103:
+                ma_score = 90
+                ma_msg = "이평선 지지/눌림목"
+                # 만약 골든크로스(5>20) 초기라면 가산점
+                if len(main_df) >= 5:
+                    main_df.ta.sma(length=5, append=True)
+                    ma5 = main_df['SMA_5'].iloc[-1]
+                    p5 = main_df['SMA_5'].iloc[-2]; p20 = main_df['SMA_20'].iloc[-2]
+                    if p5 < p20 and ma5 > ma20:
+                        ma_score = 100
+                        ma_msg = "이평선 골든크로스"
+                        reasons.append("★ 골든크로스 발생")
 
-                if p5 > 0 and p20 > 0:
-                    if p5 <= p20 and ma5 > ma20: cross_score += 20; reasons.append("★ 단기 골든크로스 (5vs20)")
-                    elif p5 >= p20 and ma5 < ma20: cross_score -= 20; reasons.append("☠️ 단기 데드크로스 (5vs20)")
-                    
-            if ma20 > 0 and ma60 > 0:
-                if ma20 > ma60: status_list.append("20>60:O")
-                else: status_list.append("20>60:X")
-
-                if p20 > 0 and p60 > 0:
-                    if p20 <= p60 and ma20 > ma60: cross_score += 30; reasons.append("★★ 중기 골든크로스 (20vs60)")
-                    elif p20 >= p60 and ma20 < ma60: cross_score -= 30; reasons.append("☠️☠️ 중기 데드크로스 (20vs60)")
-
-            final_ma = min(100, max(0, align_score + cross_score))
+            # 너무 높음 (110% 이상) -> 과열 (감점)
+            elif disparity >= 110:
+                ma_score = 20
+                ma_msg = "단기 과열 (이격 과대)"
             
-            status_msg = " | ".join(status_list) if status_list else "데이터 부족"
-            
-            add_sc(final_ma, w_ma, None, "MA_Cross", status_msg)
-        except Exception as e:
-            add_sc(50, w_ma, None, "MA_Cross", "계산 중")
+            # 너무 낮음 (90% 이하) -> 역배열 심화 (주의)
+            elif disparity <= 90:
+                ma_score = 40
+                ma_msg = "역배열 하락세"
+
+            add_sc(ma_score, w_ma, ma_msg, "MA_Pos", f"이격도 {int(disparity)}%")
+        except: add_sc(50, w_ma, None, "MA_Pos", "계산중")
 
         # 2. RSI
         try:
@@ -338,18 +342,32 @@ def analyze_stock(
 
         # 4. MACD
         try:
-            macd = main_df.ta.macd(fast=12, slow=26, signal=9, append=False)
-            curr_m = macd.iloc[-1, 0]; prev_m = macd.iloc[-2, 0]
-            is_rising = curr_m > prev_m; is_above_zero = curr_m > 0
+            macd = main_df.ta.macd(fast=12, slow=26, signal=9)
+            curr_m = macd.iloc[-1, 0]; curr_s = macd.iloc[-1, 2] # MACD, Signal
+            prev_m = macd.iloc[-2, 0]; prev_s = macd.iloc[-2, 2]
             
-            macd_score = 50
-            if is_above_zero and is_rising: macd_score = 100; msg="MACD 상승가속"
-            elif not is_above_zero and is_rising: macd_score = 75; msg="MACD 반등시도"
-            elif is_above_zero and not is_rising: macd_score = 40; msg="MACD 조정"
-            else: macd_score = 0; msg="MACD 하락가속"
+            m_score = 50
+            m_msg = None
             
-            add_sc(macd_score, w_macd, msg, "MACD", f"{curr_m:.2f}")
-        except: indicators["MACD"] = "-"
+            # [전략] 0선 아래(바닥권)에서 골든크로스 발생 시 최고점
+            if curr_m < 0 and curr_s < 0:
+                if prev_m < prev_s and curr_m > curr_s: # 골든크로스
+                    m_score = 100
+                    m_msg = "바닥권 추세 전환 (MACD Golden)"
+                    reasons.append("★ MACD 바닥권 반등")
+                elif curr_m > curr_s: # 상승 지속
+                    m_score = 80
+                    m_msg = "바닥권 상승 시도"
+                else:
+                    m_score = 20 # 하락 지속
+            
+            # 0선 위(상승장)에서는 점수를 조금 낮게 (이미 올랐으므로)
+            elif curr_m > 0:
+                if curr_m > curr_s: m_score = 60 # 상승 지속 (But 비쌈)
+                else: m_score = 0 # 하락 반전 (매도)
+
+            add_sc(m_score, w_macd, m_msg, "MACD", f"{curr_m:.2f}")
+        except: indicators["MACD"]="-"
 
         # 5. BB
         try:
@@ -387,6 +405,34 @@ def analyze_stock(
             "long": {"tp": fmt(last_price + atr_1wk*3), "sl": fmt(last_price - atr_1wk*3)}
         }
         
+        try:
+            # 1. 지지선 (Support): 최근 20일(영업일 기준 한달) 중 최저가
+            # 의미: "이 가격 깨지면 바닥 뚫린 것" (손절 라인)
+            recent_low = main_df['Low'].tail(20).min()
+            
+            # 2. 저항선 (Resistance): 20일 이동평균선
+            # 의미: "하락 추세에서 반등 시 1차 목표치"
+            # 만약 현재가가 20일선보다 위에 있다면? -> 최근 20일 최고가를 저항선으로 잡음
+            ma20_val = main_df['SMA_20'].iloc[-1] if 'SMA_20' in main_df else main_df['Close'].mean()
+            recent_high = main_df['High'].tail(20).max()
+            
+            if last_price < ma20_val:
+                resistance_price = ma20_val # 아직 역배열이면 20일선이 저항
+            else:
+                resistance_price = recent_high # 정배열이면 전고점이 저항
+
+            # 현재가 위치 비율 (지지선 ~ 저항선 사이 어디쯤인지)
+            # 0%에 가까울수록 지지선(바닥) 근처, 100%에 가까울수록 저항선(천장) 근처
+            position_score = (last_price - recent_low) / (resistance_price - recent_low) * 100
+            
+            sr_data = {
+                "support": fmt(recent_low),
+                "resistance": fmt(resistance_price),
+                "position": int(position_score)
+            }
+        except:
+            sr_data = {"support": "-", "resistance": "-", "position": 50}
+        
         # VIX
         try:
             vix_df = yf.download("^VIX", period="5d", progress=False, auto_adjust=True)
@@ -421,12 +467,31 @@ def analyze_stock(
         if gemini_api_key:
             try:
                 genai.configure(api_key=gemini_api_key)
+                inv_str = "정보 없음"
+                if investor_trend:
+                    inv_str = f"개인 {investor_trend['individual']}, 외인 {investor_trend['foreigner']}, 기관 {investor_trend['institution']}"
+
+                # 애널리스트 데이터 포맷팅
+                analyst_str = "정보 없음"
+                if analyst_data and analyst_data.get('upside') != "-":
+                    analyst_str = f"투자의견 {analyst_data['recommendation']}, 상승여력 {analyst_data['upside']}"
+                    
                 prompt = f"""
-                전문가로서 분석해. 3문장. 매수/매도 추천.
-                종목: {ticker}, 점수: {final_score}
-                추세: {trend_status['msg']}
-                이유: {', '.join(reasons)}
-                전략: 스윙TP {strategies['swing']['tp']}
+                당신은 '저점 매수(Bottom Fishing)' 및 '기술적 반등'을 전문으로 분석하는 AI 애널리스트입니다.
+                현재 주가가 바닥권인지, 아니면 추가 하락 위험이 있는지 분석하여 3문장으로 요약해 주세요.
+
+                [분석 데이터]
+                1. 종목: {stock_name} ({ticker})
+                2. 저점 매수 점수: {final_score}점 (100점에 가까울수록 과매도 후 반등 가능성 높음)
+                3. 감지된 시그널: {', '.join(reasons) if reasons else '특이사항 없음'}
+                4. 수급 현황(일별): {inv_str}
+                5. 월가/증권사 의견: {analyst_str}
+
+                [분석 가이드]
+                - 시그널(RSI 과매도, 스토캐스틱 골든크로스 등)이 있다면 이를 근거로 반등 가능성을 언급하세요.
+                - 외인/기관의 수급이 들어오고 있다면 바닥 다지기 신호로 해석하세요.
+                - 점수가 낮다면 '아직 하락 추세가 강해 바닥을 확인하지 못했다'는 취지로 경고하세요.
+                - 말투는 전문적이고 간결하게 작성하세요.
                 """
                 model_name = gemini_model if gemini_model else "models/gemini-2.0-flash"
                 model = genai.GenerativeModel(model_name)
@@ -440,7 +505,8 @@ def analyze_stock(
             "turnover": {"rate": f"{tr:.2f}", "msg": t_msg, "volume": f"{vol:,.0f}", "shares": f"{shares:,.0f}"},
             "real_time": real_time_applied, "vix": {"score": f"{vix_val:.2f}", "msg": vix_msg},
             "trend_status": trend_status, "ai_message": ai_comment,
-            "analyst": analyst_data, "investors": investor_trend
+            "analyst": analyst_data, "investors": investor_trend,
+            "auth_info": { "token": new_issued_token, "expire": token_expire_time }, "sr": sr_data,
         }
 
     except Exception as e:
