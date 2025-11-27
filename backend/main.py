@@ -12,6 +12,7 @@ import io
 import os
 
 NAME_TO_CODE = {}
+CODE_TO_NAME = {}
 
 def load_kis_master_data():
     global NAME_TO_CODE
@@ -53,6 +54,7 @@ def load_kis_master_data():
     except Exception as e:
         print(f"🚨 마스터 파일 로드 실패: {e}")
         NAME_TO_CODE.update({"삼성전자": "005930", "카카오": "035720", "NAVER": "035420", "하이닉스": "000660"})
+        CODE_TO_NAME.update({"005930": "삼성전자", "035720": "카카오"})
 
 load_kis_master_data()
 
@@ -172,6 +174,14 @@ def analyze_stock(
     ticker = get_ticker_symbol(keyword)
     is_korean = ticker.endswith(".KS")
     
+    stock_name = ticker
+    if is_korean:
+        short_code = ticker.replace(".KS", "")
+        if short_code in CODE_TO_NAME:
+            stock_name = CODE_TO_NAME[short_code]
+        elif keyword in NAME_TO_CODE:
+            stock_name = keyword
+    
     req_intervals = list(set(["60m", "1d", "1wk", ma_interval]))
     data_store = {}
 
@@ -289,12 +299,42 @@ def analyze_stock(
 
         # 3. Stoch
         try:
+            # K=14, D=3, Slow D=3
             stoch = main_df.ta.stoch(k=14, d=3, append=False)
-            k = stoch.iloc[-1, 0]
-            stoch_score = 100 - k
-            msg = "스토캐스틱 바닥" if k <= 20 else "스토캐스틱 과열" if k >= 80 else None
-            add_sc(stoch_score, w_stoch, msg, "Stoch", f"{k:.2f}")
-        except: indicators["Stoch"] = "-"
+            curr_k = stoch.iloc[-1, 0]  # 현재 %K
+            curr_d = stoch.iloc[-1, 1]  # 현재 %D
+            prev_k = stoch.iloc[-2, 0]  # 전일 %K
+            prev_d = stoch.iloc[-2, 1]  # 전일 %D
+            
+            stoch_score = 100 - curr_k
+            stoch_msg = None
+
+            if curr_k <= 20 and prev_k < prev_d and curr_k > curr_d:
+                stoch_score = 100  # 강력 매수
+                stoch_msg = "Stoch 과매도 골든크로스"
+                reasons.append(stoch_msg)
+            
+            elif curr_k >= 80 and prev_k > prev_d and curr_k < curr_d:
+                stoch_score = 0  # 강력 매도
+                stoch_msg = "Stoch 과매수 데드크로스"
+                reasons.append(stoch_msg)
+
+            curr_price = main_df['Close'].iloc[-1]
+            prev_price = main_df['Close'].iloc[-2]
+            
+            if curr_price < prev_price and curr_k > prev_k:
+                stoch_score += 20
+                div_msg = "상승 다이버전스 감지"
+                reasons.append(div_msg)
+                stoch_msg = f"{stoch_msg}, {div_msg}" if stoch_msg else div_msg
+
+            final_stoch_score = max(0, min(100, stoch_score))
+            
+            add_sc(final_stoch_score, w_stoch, None, "Stoch", f"K{curr_k:.1f}/D{curr_d:.1f}")
+
+        except Exception as e: 
+            indicators["Stoch"] = "-"
+            print(f"Stoch Error: {e}")
 
         # 4. MACD
         try:
@@ -395,7 +435,7 @@ def analyze_stock(
             except Exception as e: ai_comment = str(e)
 
         return {
-            "ticker": ticker, "price": fmt(last_price), "currency": "KRW" if is_korean else "USD",
+            "ticker": ticker, "name": stock_name, "price": fmt(last_price), "currency": "KRW" if is_korean else "USD",
             "score": final_score, "reasons": reasons, "indicators": indicators, "strategies": strategies,
             "turnover": {"rate": f"{tr:.2f}", "msg": t_msg, "volume": f"{vol:,.0f}", "shares": f"{shares:,.0f}"},
             "real_time": real_time_applied, "vix": {"score": f"{vix_val:.2f}", "msg": vix_msg},

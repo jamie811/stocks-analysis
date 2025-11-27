@@ -128,7 +128,16 @@ function App() {
         setError(response.data.error);
       } else {
         setResult(response.data);
-        addToHistory(response.data.ticker); 
+
+        const isTickerType = /^[0-9]+$/.test(searchTicker) || /^[0-9]+\.KS$/.test(searchTicker);
+        let historyName = response.data.ticker;
+        if (isTickerType) {
+            historyName = response.data.ticker.replace(".KS", "");
+        } else {
+            historyName = response.data.name || searchTicker;
+        }
+
+        addToHistory(historyName); 
       }
     } catch (err) { setError("서버 통신 오류 (잠시 후 다시 시도)"); } 
     finally { setLoading(false); }
@@ -309,8 +318,9 @@ function App() {
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 items-center border-b border-gray-700">
                   <div className="text-center">
                       <div className="flex items-center justify-center gap-2 mb-1">
-                          <h3 className="text-2xl font-extrabold">{result.ticker}</h3>
-                          {result.real_time && <span className="bg-red-600 text-white text-[10px] px-1.5 rounded animate-pulse">LIVE</span>}
+                        <h3 className="text-3xl font-extrabold">{result.name}</h3>
+                        <span className="text-xs text-gray-400 font-mono tracking-wider">{result.ticker}</span>
+                        {result.real_time && <span className="bg-red-600 text-white text-[10px] px-1.5 rounded animate-pulse">LIVE</span>}
                       </div>
                       <p className="text-3xl font-bold text-white mb-2">{result.price} <span className="text-sm text-gray-500">{result.currency}</span></p>
                       <div className="inline-flex items-center gap-2 bg-gray-700/50 px-3 py-1 rounded-lg border border-gray-600 mt-1">
