@@ -6,6 +6,55 @@ import pandas as pd
 import pandas_ta as ta
 import requests
 import google.generativeai as genai
+import time
+import zipfile
+import io
+import os
+
+NAME_TO_CODE = {}
+
+def load_kis_master_data():
+    global NAME_TO_CODE
+    print("⏳ KIS 종목 마스터 파일 다운로드 중... (서버 시작 시 1회)")
+    
+    base_dir = os.getcwd()
+    urls = {
+        "kospi": "https://new.real.download.dws.co.kr/common/master/kospi_code.mst.zip",
+        "kosdaq": "https://new.real.download.dws.co.kr/common/master/kosdaq_code.mst.zip"
+    }
+
+    try:
+        for market, url in urls.items():
+            res = requests.get(url)
+            if res.status_code != 200:
+                print(f"❌ {market} 다운로드 실패")
+                continue
+                
+            with zipfile.ZipFile(io.BytesIO(res.content)) as zf:
+                file_name = zf.namelist()[0] 
+                with zf.open(file_name) as f:
+                    content = f.read().decode('cp949') 
+                    
+                    lines = content.split('\n')
+                    for line in lines:
+                        if len(line) < 30: continue
+                        code = line[0:9].strip()
+                        name_raw = line[21:].strip()
+                        
+                        name = name_raw.split()[0] if name_raw else ""
+                        
+                        short_code = code[1:7] if len(code) >= 7 else code 
+                        
+                        if name and short_code:
+                            NAME_TO_CODE[name] = short_code
+
+        print(f"✅ KIS 종목 마스터 로드 완료! (총 {len(NAME_TO_CODE)}개 종목)")
+        
+    except Exception as e:
+        print(f"🚨 마스터 파일 로드 실패: {e}")
+        NAME_TO_CODE.update({"삼성전자": "005930", "카카오": "035720", "NAVER": "035420", "하이닉스": "000660"})
+
+load_kis_master_data()
 
 app = FastAPI()
 
@@ -16,24 +65,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 def get_ticker_symbol(keyword):
-    keyword = keyword.upper()
-    if keyword.isdigit(): return f"{keyword}.KS"
-    return keyword
+    keyword = keyword.strip()
+    
+    if keyword in NAME_TO_CODE:
+        return f"{NAME_TO_CODE[keyword]}.KS"
+    
+    if keyword.isdigit() and len(keyword) == 6:
+        return f"{keyword}.KS"
+        
+    return keyword.upper()
 
 def get_period_by_interval(interval):
     if interval in ["1m", "2m", "5m"]: return "5d"
     if interval in ["15m", "30m", "60m", "90m", "1h"]: return "1mo"
     return "2y"
 
+TOKEN_CACHE = {}
+
 # [KIS] 토큰 발급
 def get_kis_token(appkey, appsecret):
+    global TOKEN_CACHE
+    
+    if appkey in TOKEN_CACHE:
+        cache = TOKEN_CACHE[appkey]
+        if time.time() < cache["expire_time"]:
+            return cache["token"]
+        
     url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
     body = {"grant_type": "client_credentials", "appkey": appkey, "appsecret": appsecret}
     try:
         res = requests.post(url, json=body)
-        return res.json().get("access_token")
-    except: return None
+        data = res.json()
+        access_token = data.get("access_token")
+        
+        if access_token:
+            expire_in = 20 * 60 * 60 
+            TOKEN_CACHE[appkey] = {
+                "token": access_token,
+                "expire_time": time.time() + expire_in
+            }
+            return access_token
+        return None
+    except Exception as e:
+        print(f"Token Error: {e}")
+        return None
     
 def get_kis_investors(ticker, token, appkey, appsecret):
     url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-investor"
