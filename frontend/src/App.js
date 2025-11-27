@@ -33,7 +33,7 @@ function App() {
 
   const API_BASE_URL = window.location.hostname === "localhost" 
     ? "http://127.0.0.1:8010" 
-    : "https://my-stock-api.onrender.com"; 
+    : "https://stocks-analysis-1uow.onrender.com"; 
 
   const defaultSettings = {
     maInterval: "1wk", maShort: 50, maLong: 200,
